@@ -21,6 +21,12 @@ var studyArea = ee.Geometry.Rectangle(
   false
 );
 
+// When the CWC/NWDP river polygon is imported into Earth Engine, replace
+// studyArea with that asset and optionally filter it to the target river.
+// Example:
+// var cwcRiver = ee.FeatureCollection('users/YOUR_ACCOUNT/CWC_RIVER_POLYGON');
+// studyArea = cwcRiver.geometry().intersection(studyArea, ee.ErrorMargin(1));
+
 var START_YEAR = 2020;
 var END_YEAR = 2026;
 
