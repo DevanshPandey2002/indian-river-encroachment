@@ -55,8 +55,7 @@ export default function Home() {
       const imagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
       const wms = "https://bhuvan-vec2.nrsc.gov.in/bhuvan/wms";
       const ganga = L.tileLayer.wms(wms, { layers: "organization:GangaRiver", format: "image/png", transparent: true, opacity: 0.9, attribution: "ISRO/NRSC Bhuvan" });
-      // Bhuvan's published Ganga basin layer uses the uppercase service name.
-      const basinLayer = L.tileLayer.wms(wms, { layers: "organization:GANGA_BASIN", format: "image/png", transparent: true, opacity: 0.72, zIndex: 350, attribution: "ISRO/NRSC Bhuvan" });
+      const basinLayer = L.layerGroup();
 
       const corridorLayer = L.layerGroup();
       const waterLayer = L.layerGroup();
@@ -71,7 +70,7 @@ export default function Home() {
 
       (satellite ? imagery : street).addTo(map);
       if (river) ganga.addTo(map);
-      if (basin) basinLayer.addTo(map);
+      if (basin) loadBasin();
 
       // Official NWDP infrastructure is fetched through the app API so the
       // browser does not need to talk directly to the data portal.
@@ -90,6 +89,30 @@ export default function Home() {
           infraLoadingRef.current[statusKey] = false;
           setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
           console.warn("NWDP layer unavailable:", path, error);
+        }
+      }
+
+      async function loadBasin() {
+        if (basinLayer.getLayers().length) {
+          basinLayer.addTo(map);
+          return;
+        }
+        try {
+          const response = await fetch("/api/nwdp/basin");
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          L.geoJSON(data, {
+            style: { color: "#dda15e", weight: 2.5, fillColor: "#dda15e", fillOpacity: 0.08 },
+            onEachFeature: (feature, layer) => {
+              const p = feature.properties || {};
+              const name = p.name || p.NAME || p.basin_name || p.Basin_Name || "CWC basin";
+              layer.bindTooltip(name);
+              layer.on("click", () => setInfraSelected({ kind: "River basin", name, source: "CWC / NWDP" }));
+            }
+          }).addTo(basinLayer);
+          basinLayer.addTo(map);
+        } catch (error) {
+          console.warn("CWC basin unavailable:", error);
         }
       }
 
@@ -128,7 +151,7 @@ export default function Home() {
             layer.bindTooltip(name);
             layer.on("click", () => setInfraSelected({ kind: "Reservoir", name, source: "CWC / NWDP" }));
           }, undefined,
-          "https://nwdp.nwic.gov.in/dataset/reservoir/resource/1790dd33-0e07-49d0-bc52-ca222d30543e/download/reservoir.geojson",
+          "https://nwdp.nwic.gov.in/dataset/f098645e-950f-40fe-b100-fd2cc95e789d/resource/1790dd33-0e07-49d0-bc52-ca222d30543e/download/reservoir.geojson",
           "reservoirs"
         ),
         projects: () => addGeoJsonLayer(
@@ -140,7 +163,7 @@ export default function Home() {
             layer.bindTooltip(name);
             layer.on("click", () => setInfraSelected({ kind: "Water resource project", name, source: "CWC / NWDP" }));
           }, undefined,
-          "https://nwdp.nwic.gov.in/dataset/water-resource-project/resource/7b1e0abf-ca24-46d2-b0dc-7234021e414d/download/Command_Area_GeoJSON.geojson",
+          "https://nwdp.nwic.gov.in/dataset/a4fde712-4a1f-461b-897a-411ebb29a622/resource/7b1e0abf-ca24-46d2-b0dc-7234021e414d/download/command_area.geojson",
           "projects"
         ),
         waterbodies: () => addGeoJsonLayer(
@@ -152,7 +175,7 @@ export default function Home() {
             layer.bindTooltip(name);
             layer.on("click", () => setInfraSelected({ kind: "Surface waterbody", name, source: "ISRO SAC / NWDP" }));
           }, undefined,
-          "https://nwdp.nwic.gov.in/dataset/surface-waterbodies/resource/7451d595-37bf-4238-90c0-2edc5afce7b3/download/Waterbody_Uttar_Pradesh.geojson",
+          "https://nwdp.nwic.gov.in/dataset/811f6a62-61c2-4d79-b90b-deeee4151f6d/resource/7451d595-37bf-4238-90c0-2edc5afce7b3/download/wb_up_geojson.zip",
           "waterbodies"
         ),
         dams: () => addGeoJsonLayer(
@@ -219,7 +242,8 @@ export default function Home() {
       layersRef.current = {
         map, street, imagery, ganga, basin: basinLayer,
         corridorLayer, waterLayer, markerLayer,
-        infrastructureLayer, riverNetworkLayer, canalLayer, damLayer, reservoirLayer, projectLayer, waterbodyLayer
+        infrastructureLayer, riverNetworkLayer, canalLayer, damLayer, reservoirLayer, projectLayer, waterbodyLayer,
+        basinLoader: loadBasin
       };
       mapRef.current = map;
     }
@@ -243,7 +267,15 @@ export default function Home() {
       else { layers.street.addTo(map); layers.imagery.remove(); }
     }
     if (name === "river") enabled ? layers.ganga.addTo(map) : layers.ganga.remove();
-    if (name === "basin") enabled ? layers.basin.addTo(map) : layers.basin.remove();
+    if (name === "basin") {
+      if (enabled) {
+        const basinLoader = layers.basinLoader;
+        if (basinLoader) basinLoader();
+        else layers.basin.addTo(map);
+      } else {
+        layers.basin.remove();
+      }
+    }
     if (name === "corridor") enabled ? layers.corridorLayer.addTo(map) : layers.corridorLayer.remove();
     if (name === "water") {
       if (enabled) {
@@ -316,7 +348,7 @@ export default function Home() {
           <label><input type="checkbox" checked={candidatesLayer} onChange={(e) => { setCandidatesLayer(e.target.checked); toggle("candidates", e.target.checked); }} /> <b>Potential candidates</b></label>
 
           <hr />
-          <h3>WATER INFRASTRUCTURE</h3>
+          <h3>WATER INFRASTRUCTURE & WATERBODIES</h3>
           <label><input type="checkbox" checked={riverNetwork} onChange={(e) => { setRiverNetwork(e.target.checked); toggle("riverNetwork", e.target.checked); }} /> River network — CWC/NWDP</label>
           <label><input type="checkbox" checked={canals} onChange={(e) => { setCanals(e.target.checked); toggle("canals", e.target.checked); }} /> Canal network — CWC/NWDP</label>
           <label><input type="checkbox" checked={dams} onChange={(e) => { setDams(e.target.checked); toggle("dams", e.target.checked); }} /> Dams — NDSA/NWDP</label>
