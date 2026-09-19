@@ -241,29 +241,49 @@ export default function Home() {
       ).bindTooltip("V0.7 illustrative 1 km screening corridor");
       corridorPolygon.addTo(corridorLayer);
 
-      // The live Earth Engine water exports are not connected yet, so the timeline
-      // uses clearly-labelled illustrative envelopes that change with the selected year.
-      // Once the real annual rasters are connected, this block is replaced by those assets.
-      const waterStart = [
-        [25.455,81.795],[25.480,81.825],[25.468,81.860],[25.448,81.895],
-        [25.425,81.930],[25.405,81.915],[25.420,81.880],[25.440,81.840]
-      ];
-      const waterEnd = [
-        [25.460,81.800],[25.472,81.825],[25.460,81.855],[25.445,81.885],
-        [25.432,81.915],[25.417,81.905],[25.430,81.875],[25.447,81.845]
-      ];
-      for (let y = 2020; y <= 2026; y += 1) {
-        const t = (y - 2020) / 6;
-        const coords = waterStart.map((p, i) => [
-          p[0] + (waterEnd[i][0] - p[0]) * t,
-          p[1] + (waterEnd[i][1] - p[1]) * t
-        ]);
-        const polygon = L.polygon(coords, {
-          color: "#283618", weight: 1, fillColor: "#283618", fillOpacity: 0.28
-        }).bindTooltip(`Illustrative historical-water envelope • ${y}`);
-        waterShapesRef.current[y] = polygon;
-        if (y === year) polygon.addTo(waterLayer);
+      // Real open historical surface-water products from EC JRC/Google Global Surface Water.
+      // 2021 covers the earlier baseline; 2024 is the latest public GSW release.
+      // 2025–2026 Sentinel-2 derived products will be enabled after the EE export pipeline
+      // is connected to hosted COG/tiles; we never substitute illustrative geometry.
+      const gsw2021 = L.tileLayer(
+        "https://storage.googleapis.com/global-surface-water/tiles2021/extent/{z}/{x}/{y}.png",
+        {
+          maxZoom: 13,
+          opacity: 0.62,
+          errorTileUrl: "https://storage.googleapis.com/global-surface-water/downloads_ancillary/blank.png",
+          attribution: "EC JRC/Google Global Surface Water 2021"
+        }
+      );
+      const gsw2024 = L.tileLayer(
+        "https://storage.googleapis.com/water-world/tiles2024/extent/{z}/{x}/{y}.png",
+        {
+          maxZoom: 13,
+          opacity: 0.62,
+          errorTileUrl: "https://storage.googleapis.com/global-surface-water/downloads_ancillary/blank.png",
+          attribution: "EC JRC/Google Global Surface Water 2024"
+        }
+      );
+      layersRef.current.gsw2021 = gsw2021;
+      layersRef.current.gsw2024 = gsw2024;
+
+      function showHistoricalWater(selectedYear) {
+        gsw2021.remove();
+        gsw2024.remove();
+        if (!water) return;
+
+        if (selectedYear <= 2021) {
+          gsw2021.addTo(map);
+          setInfraStatus((s) => ({ ...s, water: "visible (GSW 2021)" }));
+        } else if (selectedYear <= 2024) {
+          gsw2024.addTo(map);
+          setInfraStatus((s) => ({ ...s, water: "visible (GSW 2024)" }));
+        } else {
+          setInfraStatus((s) => ({ ...s, water: "no Sentinel-2 export yet" }));
+        }
       }
+
+      layersRef.current.showHistoricalWater = showHistoricalWater;
+      showHistoricalWater(year);
 
       candidates.forEach((candidate) => {
         const marker = L.circleMarker([candidate.lat, candidate.lng], {
@@ -317,12 +337,11 @@ export default function Home() {
     }
     if (name === "corridor") enabled ? layers.corridorLayer.addTo(map) : layers.corridorLayer.remove();
     if (name === "water") {
-      if (enabled) {
-        layers.waterLayer.addTo(map);
-        const selectedWater = waterShapesRef.current[year];
-        if (selectedWater) selectedWater.addTo(layers.waterLayer);
-      } else {
-        layers.waterLayer.remove();
+      if (layers.showHistoricalWater) layers.showHistoricalWater(year);
+      if (!enabled) {
+        layers.gsw2021?.remove();
+        layers.gsw2024?.remove();
+        setInfraStatus((s) => ({ ...s, water: "off" }));
       }
     }
     if (name === "candidates") enabled ? layers.markerLayer.addTo(map) : layers.markerLayer.remove();
@@ -355,13 +374,8 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const group = layersRef.current.waterLayer;
-    if (!group || !mapRef.current) return;
-    Object.values(waterShapesRef.current).forEach((shape) => group.removeLayer(shape));
-    if (water) {
-      const selectedWater = waterShapesRef.current[year];
-      if (selectedWater) selectedWater.addTo(group);
-      if (mapRef.current.hasLayer(group)) group.bringToFront();
+    if (layersRef.current.showHistoricalWater) {
+      layersRef.current.showHistoricalWater(year);
     }
   }, [year, water]);
 
@@ -427,7 +441,7 @@ export default function Home() {
             <a href={NWDP_BASIN} target="_blank" rel="noreferrer">CWC basin dataset ↗</a>
           </div>
 
-          <div className="note"><b>OFFICIAL DATA SOURCES</b><br />Infrastructure and waterbody layers are sourced from the Government of India's National Water Data Portal. Waterbodies use ISRO SAC data; river, canal, reservoir and irrigation project layers use CWC/NWDP; dams use NDSA/NWDP. The historical-water timeline remains illustrative until Earth Engine exports are connected.</div>
+          <div className="note"><b>WATER HISTORY</b><br />Historical water now uses the real EC JRC/Google Global Surface Water products: 2021 baseline through 2021 and the updated 2024 release for 2022–2024. 2025–2026 will remain empty until Sentinel-2-derived exports are hosted; no synthetic water geometry is used.</div>
         </aside>
 
         <div className="mapWrap">
@@ -489,7 +503,7 @@ export default function Home() {
 
       <footer>
         <span>V0.8 • River reference → water infrastructure → historical water → corridor</span>
-        <span><b>NWDP infrastructure</b> • live source proxy enabled</span>
+        <span><b>Water history</b> • EC JRC/Google GSW + Sentinel-2 pipeline</span>
       </footer>
     </main>
   );
