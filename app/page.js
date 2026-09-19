@@ -10,6 +10,9 @@ const candidates = [
 ];
 
 const NWDP_RIVER = "https://nwdp.nwic.gov.in/dataset/river-polygon";
+const NWDP_RIVER_NETWORK = "https://nwdp.nwic.gov.in/dataset/river-line";
+const NWDP_CANAL = "https://nwdp.nwic.gov.in/dataset/canal";
+const NWDP_DAM = "https://nwdp.nwic.gov.in/en/dataset/dam";
 
 export default function Home() {
   const mapEl = useRef(null);
@@ -23,6 +26,10 @@ export default function Home() {
   const [water, setWater] = useState(true);
   const [candidatesLayer, setCandidatesLayer] = useState(true);
   const [year, setYear] = useState(2026);
+  const [riverNetwork, setRiverNetwork] = useState(false);
+  const [canals, setCanals] = useState(false);
+  const [dams, setDams] = useState(false);
+  const [infraSelected, setInfraSelected] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +49,55 @@ export default function Home() {
       const corridorLayer = L.layerGroup();
       const waterLayer = L.layerGroup();
       const markerLayer = L.layerGroup();
+      const infrastructureLayer = L.layerGroup();
+      const riverNetworkLayer = L.layerGroup();
+      const canalLayer = L.layerGroup();
+      const damLayer = L.layerGroup();
 
       (satellite ? imagery : street).addTo(map);
       if (river) ganga.addTo(map);
       if (basin) basinLayer.addTo(map);
+
+      // Official NWDP infrastructure is fetched through the app API so the
+      // browser does not need to talk directly to the data portal.
+      async function addGeoJsonLayer(path, layerGroup, style, onEachFeature) {
+        try {
+          const response = await fetch(path);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          L.geoJSON(data, { style, onEachFeature }).addTo(layerGroup);
+          layerGroup.addTo(map);
+        } catch (error) {
+          console.warn("NWDP layer unavailable:", path, error);
+        }
+      }
+
+      const riverNetworkStyle = { color: "#8fa06a", weight: 1.5, opacity: 0.8 };
+      const canalStyle = { color: "#dda15e", weight: 1.5, opacity: 0.8, dashArray: "5 4" };
+
+      if (riverNetwork) {
+        addGeoJsonLayer("/api/nwdp/river-network", riverNetworkLayer, riverNetworkStyle, (feature, layer) => {
+          const p = feature.properties || {};
+          layer.bindTooltip(p.name || p.NAME || p.river_name || "NWDP river network");
+          layer.on("click", () => setInfraSelected({
+            kind: "River network",
+            name: p.name || p.NAME || p.river_name || "Unnamed river reach",
+            source: "CWC / NWDP"
+          }));
+        });
+      }
+
+      if (canals) {
+        addGeoJsonLayer("/api/nwdp/canal", canalLayer, canalStyle, (feature, layer) => {
+          const p = feature.properties || {};
+          layer.bindTooltip(p.name || p.NAME || p.canal_name || "NWDP canal");
+          layer.on("click", () => setInfraSelected({
+            kind: "Canal",
+            name: p.name || p.NAME || p.canal_name || "Unnamed canal",
+            source: "CWC / NWDP"
+          }));
+        });
+      }
 
       // Visual V0.7 prototype layers. They are deliberately labelled illustrative
       // until exported Earth Engine products are connected to the application.
@@ -74,7 +126,11 @@ export default function Home() {
       if (water) waterLayer.addTo(map);
       if (candidatesLayer) markerLayer.addTo(map);
 
-      layersRef.current = { map, street, imagery, ganga, basin: basinLayer, corridorLayer, waterLayer, markerLayer };
+      layersRef.current = {
+        map, street, imagery, ganga, basin: basinLayer,
+        corridorLayer, waterLayer, markerLayer,
+        infrastructureLayer, riverNetworkLayer, canalLayer, damLayer
+      };
       mapRef.current = map;
     }
     initMap();
@@ -97,6 +153,9 @@ export default function Home() {
     if (name === "corridor") enabled ? layers.corridorLayer.addTo(map) : layers.corridorLayer.remove();
     if (name === "water") enabled ? layers.waterLayer.addTo(map) : layers.waterLayer.remove();
     if (name === "candidates") enabled ? layers.markerLayer.addTo(map) : layers.markerLayer.remove();
+    if (name === "riverNetwork") enabled ? layers.riverNetworkLayer.addTo(map) : layers.riverNetworkLayer.remove();
+    if (name === "canals") enabled ? layers.canalLayer.addTo(map) : layers.canalLayer.remove();
+    if (name === "dams") enabled ? layers.damLayer.addTo(map) : layers.damLayer.remove();
   }
 
   return (
@@ -121,6 +180,13 @@ export default function Home() {
           <label><input type="checkbox" checked={candidatesLayer} onChange={(e) => { setCandidatesLayer(e.target.checked); toggle("candidates", e.target.checked); }} /> <b>Potential candidates</b></label>
 
           <hr />
+          <h3>WATER INFRASTRUCTURE</h3>
+          <label><input type="checkbox" checked={riverNetwork} onChange={(e) => { setRiverNetwork(e.target.checked); toggle("riverNetwork", e.target.checked); }} /> River network — CWC/NWDP</label>
+          <label><input type="checkbox" checked={canals} onChange={(e) => { setCanals(e.target.checked); toggle("canals", e.target.checked); }} /> Canal network — CWC/NWDP</label>
+          <label><input type="checkbox" checked={dams} onChange={(e) => { setDams(e.target.checked); toggle("dams", e.target.checked); }} /> Dams — NDSA/NWDP</label>
+          <div className="infraHint">Trace water infrastructure alongside the river reference to understand connectivity and downstream relationships.</div>
+
+          <hr />
           <h3>TIME SERIES</h3>
           <div className="yearRow"><span>Analysis year</span><strong>{year}</strong></div>
           <input className="yearSlider" type="range" min="2020" max="2026" value={year} onChange={(e) => setYear(Number(e.target.value))} />
@@ -133,7 +199,10 @@ export default function Home() {
             <span>River polygon = river + floodplain boundaries</span>
             <span>Sentinel-2 = historical observation layer</span>
             <span>Processing = cloud probability + MNDWI</span>
-            <a href={NWDP_RIVER} target="_blank" rel="noreferrer">Open official CWC/NWDP dataset ↗</a>
+            <a href={NWDP_RIVER} target="_blank" rel="noreferrer">River polygon ↗</a>
+            <a href={NWDP_RIVER_NETWORK} target="_blank" rel="noreferrer">River network ↗</a>
+            <a href={NWDP_CANAL} target="_blank" rel="noreferrer">Canal network ↗</a>
+            <a href={NWDP_DAM} target="_blank" rel="noreferrer">Dam dataset ↗</a>
           </div>
 
           <div className="note"><b>PROTOTYPE DATA</b><br />The corridor and historical-water shapes currently shown on the map are illustrative UI layers. The Earth Engine exports are not yet connected to the web map.</div>
@@ -166,6 +235,17 @@ export default function Home() {
             <div><i /> Verification evidence</div>
           </div>
 
+          <h3 className="inspectorTitle">WATER INFRASTRUCTURE INSPECTOR</h3>
+          {infraSelected ? (
+            <div className="infraInspector">
+              <div className="tag">{infraSelected.kind}</div>
+              <h2>{infraSelected.name}</h2>
+              <div className="candidateGrid"><span>Source</span><b>{infraSelected.source}</b><span>Role</span><b>Hydrological context</b></div>
+            </div>
+          ) : (
+            <div className="empty infraEmpty"><strong>MAP</strong><p>Turn on a water-infrastructure layer and click a feature to inspect its source record.</p></div>
+          )}
+
           <h3 className="inspectorTitle">DETECTION INSPECTOR</h3>
           {selected ? (
             <div>
@@ -186,8 +266,8 @@ export default function Home() {
       </section>
 
       <footer>
-        <span>V0.7 • River reference → historical water → corridor → candidate screening</span>
-        <span><b>3 demo candidates</b> • evidence connection pending</span>
+        <span>V0.8 • River reference → water infrastructure → historical water → corridor</span>
+        <span><b>NWDP infrastructure</b> • live source proxy enabled</span>
       </footer>
     </main>
   );
