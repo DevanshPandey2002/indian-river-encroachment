@@ -61,14 +61,18 @@ export default function Home() {
 
       // Official NWDP infrastructure is fetched through the app API so the
       // browser does not need to talk directly to the data portal.
-      async function addGeoJsonLayer(path, layerGroup, style, onEachFeature, pointToLayer) {
+      async function addGeoJsonLayer(path, layerGroup, style, onEachFeature, pointToLayer, sourceUrl, statusKey) {
         try {
-          const response = await fetch(path);
+          setInfraStatus((s) => ({ ...s, [statusKey]: "loading" }));
+          let response = await fetch(path);
+          if (!response.ok && sourceUrl) response = await fetch(sourceUrl);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
           L.geoJSON(data, { style, onEachFeature, pointToLayer }).addTo(layerGroup);
           layerGroup.addTo(map);
+          setInfraStatus((s) => ({ ...s, [statusKey]: `loaded (${data.features?.length ?? 0})` }));
         } catch (error) {
+          setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
           console.warn("NWDP layer unavailable:", path, error);
         }
       }
@@ -77,24 +81,40 @@ export default function Home() {
       const canalStyle = { color: "#dda15e", weight: 1.5, opacity: 0.8, dashArray: "5 4" };
 
       const loaders = {
-        riverNetwork: () => addGeoJsonLayer("/api/nwdp/river-network", riverNetworkLayer, riverNetworkStyle, (feature, layer) => {
-          const p = feature.properties || {};
-          const name = p.name || p.NAME || p.river_name || "Unnamed river reach";
-          layer.bindTooltip(name);
-          layer.on("click", () => setInfraSelected({ kind: "River network", name, source: "CWC / NWDP" }));
-        }),
-        canals: () => addGeoJsonLayer("/api/nwdp/canal", canalLayer, canalStyle, (feature, layer) => {
-          const p = feature.properties || {};
-          const name = p.name || p.NAME || p.canal_name || "Unnamed canal";
-          layer.bindTooltip(name);
-          layer.on("click", () => setInfraSelected({ kind: "Canal", name, source: "CWC / NWDP" }));
-        }),
-        dams: () => addGeoJsonLayer("/api/nwdp/dam", damLayer, null, (feature, layer) => {
-          const p = feature.properties || {};
-          const name = p.name || p.NAME || p.dam_name || p.Dam_Name || "NWDP dam";
-          layer.bindTooltip(name);
-          layer.on("click", () => setInfraSelected({ kind: "Dam", name, source: "National Dam Safety Authority / NWDP" }));
-        }, (_feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }))
+        riverNetwork: () => addGeoJsonLayer(
+          "/api/nwdp/river-network", riverNetworkLayer, riverNetworkStyle,
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.river_name || "Unnamed river reach";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "River network", name, source: "CWC / NWDP" }));
+          }, undefined,
+          "https://nwdp.nwic.gov.in/dataset/3209962f-d0ff-45b8-910a-209bf69a0ccf/resource/6e552705-842d-40a4-92b2-8506bb66df2a/download/river_network.geojson",
+          "riverNetwork"
+        ),
+        canals: () => addGeoJsonLayer(
+          "/api/nwdp/canal", canalLayer, canalStyle,
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.canal_name || "Unnamed canal";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "Canal", name, source: "CWC / NWDP" }));
+          }, undefined,
+          "https://nwdp.nwic.gov.in/dataset/dd11dfc1-6723-4603-9426-a03e4c8cf50c/resource/89bab129-cb30-41ec-8531-e7f445c170f3/download/canal_network.geojson",
+          "canals"
+        ),
+        dams: () => addGeoJsonLayer(
+          "/api/nwdp/dam", damLayer, null,
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.dam_name || p.Dam_Name || "NWDP dam";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "Dam", name, source: "National Dam Safety Authority / NWDP" }));
+          },
+          (_feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }),
+          "https://nwdp.nwic.gov.in/dataset/814111c2-16a3-4f1b-bcc0-42274fc3fcbe/resource/0d3a7101-81b4-450e-a3dd-c2bfa0b589e3/download/dam.geojson",
+          "dams"
+        )
       };
 
       // Visual V0.7 prototype layers. They are deliberately labelled illustrative
