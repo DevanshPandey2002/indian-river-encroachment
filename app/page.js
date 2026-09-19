@@ -13,6 +13,10 @@ const NWDP_RIVER = "https://nwdp.nwic.gov.in/dataset/river-polygon";
 const NWDP_RIVER_NETWORK = "https://nwdp.nwic.gov.in/dataset/river-line";
 const NWDP_CANAL = "https://nwdp.nwic.gov.in/dataset/canal";
 const NWDP_DAM = "https://nwdp.nwic.gov.in/en/dataset/dam";
+const NWDP_RESERVOIR = "https://nwdp.nwic.gov.in/dataset/reservoir";
+const NWDP_PROJECTS = "https://nwdp.nwic.gov.in/en/dataset/water-resource-project";
+const NWDP_WATERBODIES = "https://nwdp.nwic.gov.in/dataset/surface-waterbodies";
+const NWDP_BASIN = "https://nwdp.nwic.gov.in/dataset/basin-cwc";
 
 export default function Home() {
   const mapEl = useRef(null);
@@ -29,6 +33,9 @@ export default function Home() {
   const [riverNetwork, setRiverNetwork] = useState(false);
   const [canals, setCanals] = useState(false);
   const [dams, setDams] = useState(false);
+  const [reservoirs, setReservoirs] = useState(false);
+  const [projects, setProjects] = useState(false);
+  const [waterbodies, setWaterbodies] = useState(false);
   const [infraSelected, setInfraSelected] = useState(null);
   const [infraStatus, setInfraStatus] = useState({});
   const infraLoadersRef = useRef({});
@@ -58,6 +65,9 @@ export default function Home() {
       const riverNetworkLayer = L.layerGroup();
       const canalLayer = L.layerGroup();
       const damLayer = L.layerGroup();
+      const reservoirLayer = L.layerGroup();
+      const projectLayer = L.layerGroup();
+      const waterbodyLayer = L.layerGroup();
 
       (satellite ? imagery : street).addTo(map);
       if (river) ganga.addTo(map);
@@ -108,6 +118,42 @@ export default function Home() {
           }, undefined,
           "https://nwdp.nwic.gov.in/dataset/dd11dfc1-6723-4603-9426-a03e4c8cf50c/resource/89bab129-cb30-41ec-8531-e7f445c170f3/download/canal_network.geojson",
           "canals"
+        ),
+        reservoirs: () => addGeoJsonLayer(
+          "/api/nwdp/reservoir", reservoirLayer,
+          { color: "#6f7f9a", weight: 1.2, fillColor: "#6f7f9a", fillOpacity: 0.28 },
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.reservoir_name || p.Reservoir_Name || "NWDP reservoir";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "Reservoir", name, source: "CWC / NWDP" }));
+          }, undefined,
+          "https://nwdp.nwic.gov.in/dataset/reservoir/resource/1790dd33-0e07-49d0-bc52-ca222d30543e/download/reservoir.geojson",
+          "reservoirs"
+        ),
+        projects: () => addGeoJsonLayer(
+          "/api/nwdp/water-resource-project", projectLayer,
+          { color: "#7f8f55", weight: 1.2, fillColor: "#7f8f55", fillOpacity: 0.12, dashArray: "5 4" },
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.project_name || p.Project_Name || "Irrigation command area";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "Water resource project", name, source: "CWC / NWDP" }));
+          }, undefined,
+          "https://nwdp.nwic.gov.in/dataset/water-resource-project/resource/7b1e0abf-ca24-46d2-b0dc-7234021e414d/download/Command_Area_GeoJSON.geojson",
+          "projects"
+        ),
+        waterbodies: () => addGeoJsonLayer(
+          "/api/nwdp/waterbodies", waterbodyLayer,
+          { color: "#3d6f78", weight: 1, fillColor: "#3d6f78", fillOpacity: 0.32 },
+          (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p.name || p.NAME || p.waterbody_name || p.Waterbody_Name || "Surface waterbody";
+            layer.bindTooltip(name);
+            layer.on("click", () => setInfraSelected({ kind: "Surface waterbody", name, source: "ISRO SAC / NWDP" }));
+          }, undefined,
+          "https://nwdp.nwic.gov.in/dataset/surface-waterbodies/resource/7451d595-37bf-4238-90c0-2edc5afce7b3/download/Waterbody_Uttar_Pradesh.geojson",
+          "waterbodies"
         ),
         dams: () => addGeoJsonLayer(
           "/api/nwdp/dam", damLayer, null,
@@ -173,7 +219,7 @@ export default function Home() {
       layersRef.current = {
         map, street, imagery, ganga, basin: basinLayer,
         corridorLayer, waterLayer, markerLayer,
-        infrastructureLayer, riverNetworkLayer, canalLayer, damLayer
+        infrastructureLayer, riverNetworkLayer, canalLayer, damLayer, reservoirLayer, projectLayer, waterbodyLayer
       };
       mapRef.current = map;
     }
@@ -213,7 +259,10 @@ export default function Home() {
     const infraLayerMap = {
       riverNetwork: layers.riverNetworkLayer,
       canals: layers.canalLayer,
-      dams: layers.damLayer
+      dams: layers.damLayer,
+      reservoirs: layers.reservoirLayer,
+      projects: layers.projectLayer,
+      waterbodies: layers.waterbodyLayer
     };
 
     if (infraLayerMap[name]) {
@@ -271,11 +320,17 @@ export default function Home() {
           <label><input type="checkbox" checked={riverNetwork} onChange={(e) => { setRiverNetwork(e.target.checked); toggle("riverNetwork", e.target.checked); }} /> River network — CWC/NWDP</label>
           <label><input type="checkbox" checked={canals} onChange={(e) => { setCanals(e.target.checked); toggle("canals", e.target.checked); }} /> Canal network — CWC/NWDP</label>
           <label><input type="checkbox" checked={dams} onChange={(e) => { setDams(e.target.checked); toggle("dams", e.target.checked); }} /> Dams — NDSA/NWDP</label>
+          <label><input type="checkbox" checked={reservoirs} onChange={(e) => { setReservoirs(e.target.checked); toggle("reservoirs", e.target.checked); }} /> Reservoirs — CWC/NWDP</label>
+          <label><input type="checkbox" checked={projects} onChange={(e) => { setProjects(e.target.checked); toggle("projects", e.target.checked); }} /> Irrigation projects — CWC/NWDP</label>
+          <label><input type="checkbox" checked={waterbodies} onChange={(e) => { setWaterbodies(e.target.checked); toggle("waterbodies", e.target.checked); }} /> Surface waterbodies — ISRO/NWDP</label>
           <div className="infraHint">Trace water infrastructure alongside the river reference to understand connectivity and downstream relationships.</div>
           <div className="infraStatus">
             <span>River: {infraStatus.riverNetwork || "off"}</span>
             <span>Canals: {infraStatus.canals || "off"}</span>
             <span>Dams: {infraStatus.dams || "off"}</span>
+            <span>Reservoirs: {infraStatus.reservoirs || "off"}</span>
+            <span>Projects: {infraStatus.projects || "off"}</span>
+            <span>Waterbodies: {infraStatus.waterbodies || "off"}</span>
           </div>
 
           <hr />
@@ -295,9 +350,13 @@ export default function Home() {
             <a href={NWDP_RIVER_NETWORK} target="_blank" rel="noreferrer">River network ↗</a>
             <a href={NWDP_CANAL} target="_blank" rel="noreferrer">Canal network ↗</a>
             <a href={NWDP_DAM} target="_blank" rel="noreferrer">Dam dataset ↗</a>
+            <a href={NWDP_RESERVOIR} target="_blank" rel="noreferrer">Reservoir dataset ↗</a>
+            <a href={NWDP_PROJECTS} target="_blank" rel="noreferrer">Water resource projects ↗</a>
+            <a href={NWDP_WATERBODIES} target="_blank" rel="noreferrer">Surface waterbodies ↗</a>
+            <a href={NWDP_BASIN} target="_blank" rel="noreferrer">CWC basin dataset ↗</a>
           </div>
 
-          <div className="note"><b>PROTOTYPE DATA</b><br />The corridor and historical-water shapes are illustrative UI layers. The year slider now changes the displayed prototype envelope. Earth Engine annual exports are not yet connected to the web map.</div>
+          <div className="note"><b>OFFICIAL DATA SOURCES</b><br />Infrastructure and waterbody layers are sourced from the Government of India's National Water Data Portal. Waterbodies use ISRO SAC data; river, canal, reservoir and irrigation project layers use CWC/NWDP; dams use NDSA/NWDP. The historical-water timeline remains illustrative until Earth Engine exports are connected.</div>
         </aside>
 
         <div className="mapWrap">
