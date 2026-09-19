@@ -45,7 +45,7 @@ export default function Home() {
       const imagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
       const wms = "https://bhuvan-vec2.nrsc.gov.in/bhuvan/wms";
       const ganga = L.tileLayer.wms(wms, { layers: "organization:GangaRiver", format: "image/png", transparent: true, opacity: 0.9, attribution: "ISRO/NRSC Bhuvan" });
-      const basinLayer = L.tileLayer.wms(wms, { layers: "organization:GANGA_BASIN", format: "image/png", transparent: true, opacity: 0.18, attribution: "ISRO/NRSC Bhuvan" });
+      const basinLayer = L.tileLayer.wms(wms, { layers: "organization:ganga_basin_clip", format: "image/png", transparent: true, opacity: 0.55, zIndex: 350, attribution: "ISRO/NRSC Bhuvan" });
 
       const corridorLayer = L.layerGroup();
       const waterLayer = L.layerGroup();
@@ -77,8 +77,8 @@ export default function Home() {
         }
       }
 
-      const riverNetworkStyle = { color: "#8fa06a", weight: 1.5, opacity: 0.8 };
-      const canalStyle = { color: "#dda15e", weight: 1.5, opacity: 0.8, dashArray: "5 4" };
+      const riverNetworkStyle = { color: "#bc6c25", weight: 3, opacity: 0.95 };
+      const canalStyle = { color: "#f2b35e", weight: 3, opacity: 0.95, dashArray: "7 5" };
 
       const loaders = {
         riverNetwork: () => addGeoJsonLayer(
@@ -111,7 +111,7 @@ export default function Home() {
             layer.bindTooltip(name);
             layer.on("click", () => setInfraSelected({ kind: "Dam", name, source: "National Dam Safety Authority / NWDP" }));
           },
-          (_feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }),
+          (_feature, latlng) => L.circleMarker(latlng, { radius: 8, color: "#fefae0", fillColor: "#bc6c25", fillOpacity: 1, weight: 3 }),
           "https://nwdp.nwic.gov.in/dataset/814111c2-16a3-4f1b-bcc0-42274fc3fcbe/resource/0d3a7101-81b4-450e-a3dd-c2bfa0b589e3/download/dam.geojson",
           "dams"
         )
@@ -180,7 +180,7 @@ export default function Home() {
     <main>
       <header>
         <div>
-          <small>I-REIM • V0.7</small>
+          <small>I-REIM • V0.8</small>
           <h1>India River Encroachment Intelligence</h1>
           <p>Evidence workspace • Ganga / Prayagraj prototype</p>
         </div>
