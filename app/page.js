@@ -70,7 +70,6 @@ export default function Home() {
 
       (satellite ? imagery : street).addTo(map);
       if (river) ganga.addTo(map);
-      if (basin) loadBasin();
 
       // Official NWDP infrastructure is fetched through the app API so the
       // browser does not need to talk directly to the data portal.
@@ -115,6 +114,9 @@ export default function Home() {
           console.warn("CWC basin unavailable:", error);
         }
       }
+
+      // Basin loader is declared before any initial/toggle call.
+      if (basin) loadBasin();
 
       const riverNetworkStyle = { color: "#bc6c25", weight: 3, opacity: 0.95 };
       const canalStyle = { color: "#f2b35e", weight: 3, opacity: 0.95, dashArray: "7 5" };
