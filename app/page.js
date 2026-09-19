@@ -254,31 +254,23 @@ export default function Home() {
           attribution: "EC JRC/Google Global Surface Water 2021"
         }
       );
-      const gsw2024 = L.tileLayer(
-        "https://storage.googleapis.com/water-world/tiles2024/extent/{z}/{x}/{y}.png",
-        {
-          maxZoom: 13,
-          opacity: 0.62,
-          errorTileUrl: "https://storage.googleapis.com/global-surface-water/downloads_ancillary/blank.png",
-          attribution: "EC JRC/Google Global Surface Water 2024"
-        }
-      );
+      // The verified public JRC web-tile service is the 2021 release.
+      // Do not invent a 2024 tile URL; newer Sentinel-2 products enter through
+      // the Earth Engine export pipeline below.
+      const gsw2024 = null;
       layersRef.current.gsw2021 = gsw2021;
       layersRef.current.gsw2024 = gsw2024;
 
       function showHistoricalWater(selectedYear) {
         gsw2021.remove();
-        gsw2024.remove();
+        if (gsw2024) gsw2024.remove();
         if (!water) return;
 
         if (selectedYear <= 2021) {
           gsw2021.addTo(map);
           setInfraStatus((s) => ({ ...s, water: "visible (GSW 2021)" }));
-        } else if (selectedYear <= 2024) {
-          gsw2024.addTo(map);
-          setInfraStatus((s) => ({ ...s, water: "visible (GSW 2024)" }));
         } else {
-          setInfraStatus((s) => ({ ...s, water: "no Sentinel-2 export yet" }));
+          setInfraStatus((s) => ({ ...s, water: "awaiting Sentinel-2 export" }));
         }
       }
 
@@ -340,7 +332,7 @@ export default function Home() {
       if (layers.showHistoricalWater) layers.showHistoricalWater(year);
       if (!enabled) {
         layers.gsw2021?.remove();
-        layers.gsw2024?.remove();
+        if (layers.gsw2024) layers.gsw2024.remove();
         setInfraStatus((s) => ({ ...s, water: "off" }));
       }
     }
@@ -441,7 +433,7 @@ export default function Home() {
             <a href={NWDP_BASIN} target="_blank" rel="noreferrer">CWC basin dataset ↗</a>
           </div>
 
-          <div className="note"><b>WATER HISTORY</b><br />Historical water now uses the real EC JRC/Google Global Surface Water products: 2021 baseline through 2021 and the updated 2024 release for 2022–2024. 2025–2026 will remain empty until Sentinel-2-derived exports are hosted; no synthetic water geometry is used.</div>
+          <div className="note"><b>WATER HISTORY</b><br />2020–2021 uses the verified EC JRC/Google Global Surface Water baseline. 2022–2026 will display only after the Sentinel-2 Earth Engine exports are hosted. No synthetic water geometry is used.</div>
         </aside>
 
         <div className="mapWrap">
