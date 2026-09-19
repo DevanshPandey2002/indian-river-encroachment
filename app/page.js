@@ -30,6 +30,7 @@ export default function Home() {
   const [canals, setCanals] = useState(false);
   const [dams, setDams] = useState(false);
   const [infraSelected, setInfraSelected] = useState(null);
+  const [infraStatus, setInfraStatus] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +183,11 @@ export default function Home() {
           <label><input type="checkbox" checked={canals} onChange={(e) => { setCanals(e.target.checked); toggle("canals", e.target.checked); }} /> Canal network — CWC/NWDP</label>
           <label><input type="checkbox" checked={dams} onChange={(e) => { setDams(e.target.checked); toggle("dams", e.target.checked); }} /> Dams — NDSA/NWDP</label>
           <div className="infraHint">Trace water infrastructure alongside the river reference to understand connectivity and downstream relationships.</div>
+          <div className="infraStatus">
+            <span>River: {infraStatus.riverNetwork || "off"}</span>
+            <span>Canals: {infraStatus.canals || "off"}</span>
+            <span>Dams: {infraStatus.dams || "off"}</span>
+          </div>
 
           <hr />
           <h3>TIME SERIES</h3>
