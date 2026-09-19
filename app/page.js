@@ -75,7 +75,7 @@ export default function Home() {
           L.geoJSON(data, { style, onEachFeature, pointToLayer }).addTo(layerGroup);
           layerGroup.addTo(map);
           infraLoadingRef.current[statusKey] = false;
-          setInfraStatus((s) => ({ ...s, [statusKey]: `visible (${data.features?.length ?? 0)})` }));
+          setInfraStatus((s) => ({ ...s, [statusKey]: `visible (${data.features?.length ?? 0})` }));
         } catch (error) {
           infraLoadingRef.current[statusKey] = false;
           setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
