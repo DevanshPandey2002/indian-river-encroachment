@@ -75,38 +75,26 @@ export default function Home() {
       const riverNetworkStyle = { color: "#8fa06a", weight: 1.5, opacity: 0.8 };
       const canalStyle = { color: "#dda15e", weight: 1.5, opacity: 0.8, dashArray: "5 4" };
 
-      if (riverNetwork) {
-        addGeoJsonLayer("/api/nwdp/river-network", riverNetworkLayer, riverNetworkStyle, (feature, layer) => {
+      const loaders = {
+        riverNetwork: () => addGeoJsonLayer("/api/nwdp/river-network", riverNetworkLayer, riverNetworkStyle, (feature, layer) => {
           const p = feature.properties || {};
-          layer.bindTooltip(p.name || p.NAME || p.river_name || "NWDP river network");
-          layer.on("click", () => setInfraSelected({
-            kind: "River network",
-            name: p.name || p.NAME || p.river_name || "Unnamed river reach",
-            source: "CWC / NWDP"
-          }));
-        });
-      }
-
-      if (dams) {
-        addGeoJsonLayer("/api/nwdp/dam", damLayer, null, (feature, layer) => {
+          const name = p.name || p.NAME || p.river_name || "Unnamed river reach";
+          layer.bindTooltip(name);
+          layer.on("click", () => setInfraSelected({ kind: "River network", name, source: "CWC / NWDP" }));
+        }),
+        canals: () => addGeoJsonLayer("/api/nwdp/canal", canalLayer, canalStyle, (feature, layer) => {
+          const p = feature.properties || {};
+          const name = p.name || p.NAME || p.canal_name || "Unnamed canal";
+          layer.bindTooltip(name);
+          layer.on("click", () => setInfraSelected({ kind: "Canal", name, source: "CWC / NWDP" }));
+        }),
+        dams: () => addGeoJsonLayer("/api/nwdp/dam", damLayer, null, (feature, layer) => {
           const p = feature.properties || {};
           const name = p.name || p.NAME || p.dam_name || p.Dam_Name || "NWDP dam";
           layer.bindTooltip(name);
           layer.on("click", () => setInfraSelected({ kind: "Dam", name, source: "National Dam Safety Authority / NWDP" }));
-        }, (feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }));
-      }
-
-      if (canals) {
-        addGeoJsonLayer("/api/nwdp/canal", canalLayer, canalStyle, (feature, layer) => {
-          const p = feature.properties || {};
-          layer.bindTooltip(p.name || p.NAME || p.canal_name || "NWDP canal");
-          layer.on("click", () => setInfraSelected({
-            kind: "Canal",
-            name: p.name || p.NAME || p.canal_name || "Unnamed canal",
-            source: "CWC / NWDP"
-          }));
-        });
-      }
+        }, (_feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }))
+      };
 
       // Visual V0.7 prototype layers. They are deliberately labelled illustrative
       // until exported Earth Engine products are connected to the application.
