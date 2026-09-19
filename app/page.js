@@ -86,8 +86,13 @@ export default function Home() {
           setInfraStatus((s) => ({ ...s, [statusKey]: `visible (${data.features?.length ?? 0})` }));
         } catch (error) {
           infraLoadingRef.current[statusKey] = false;
-          setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
-          console.warn("NWDP layer unavailable:", path, error);
+          console.warn("NWDP GeoJSON unavailable; trying India-WRIS WMS:", path, error);
+          try {
+            addWrisFallback(statusKey);
+          } catch (fallbackError) {
+            setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
+            console.warn("India-WRIS WMS fallback unavailable:", fallbackError);
+          }
         }
       }
 
@@ -111,12 +116,44 @@ export default function Home() {
           }).addTo(basinLayer);
           basinLayer.addTo(map);
         } catch (error) {
-          console.warn("CWC basin unavailable:", error);
+          console.warn("CWC basin GeoJSON unavailable; trying India-WRIS WMS:", error);
+          try {
+            addWrisWms("Basin", "9", basinLayer, "basin", { opacity: 0.55 });
+          } catch (fallbackError) {
+            console.warn("India-WRIS basin WMS unavailable:", fallbackError);
+          }
         }
       }
 
       // Basin loader is declared before any initial/toggle call.
       if (basin) loadBasin();
+
+      const WRIS_WMS = "https://india-wris.nrsc.gov.in/arcgis/services/SubInfoSysLCC";
+
+      function addWrisWms(service, layers, targetLayer, statusKey, options = {}) {
+        const wmsLayer = L.tileLayer.wms(`${WRIS_WMS}/${service}/MapServer/WMSServer`, {
+          layers, format: "image/png", transparent: true,
+          opacity: options.opacity ?? 0.85,
+          version: "1.3.0",
+          attribution: "India-WRIS / CWC / ISRO"
+        });
+        wmsLayer.addTo(targetLayer);
+        targetLayer.addTo(map);
+        setInfraStatus((s) => ({ ...s, [statusKey]: "visible (India-WRIS WMS)" }));
+        return wmsLayer;
+      }
+
+      function addWrisFallback(statusKey) {
+        const fallback = {
+          riverNetwork: () => addWrisWms("River", "0", riverNetworkLayer, "riverNetwork", { opacity: 0.9 }),
+          canals: () => addWrisWms("Canal", "3,4,5,6,7", canalLayer, "canals", { opacity: 0.8 }),
+          dams: () => addWrisWms("WRP", "9,10", damLayer, "dams", { opacity: 0.9 }),
+          reservoirs: () => addWrisWms("SWB", "10,11,12,13", reservoirLayer, "reservoirs", { opacity: 0.65 }),
+          projects: () => addWrisWms("WRP", "6,7,8,10,11", projectLayer, "projects", { opacity: 0.7 }),
+          waterbodies: () => addWrisWms("SWB", "4,5,6,7,8,9,14", waterbodyLayer, "waterbodies", { opacity: 0.55 })
+        };
+        return fallback[statusKey]?.();
+      }
 
       const riverNetworkStyle = { color: "#bc6c25", weight: 3, opacity: 0.95 };
       const canalStyle = { color: "#f2b35e", weight: 3, opacity: 0.95, dashArray: "7 5" };
