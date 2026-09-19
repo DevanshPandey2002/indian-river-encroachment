@@ -31,6 +31,9 @@ export default function Home() {
   const [dams, setDams] = useState(false);
   const [infraSelected, setInfraSelected] = useState(null);
   const [infraStatus, setInfraStatus] = useState({});
+  const infraLoadersRef = useRef({});
+  const infraLoadingRef = useRef({});
+  const waterShapesRef = useRef({});
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +48,8 @@ export default function Home() {
       const imagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
       const wms = "https://bhuvan-vec2.nrsc.gov.in/bhuvan/wms";
       const ganga = L.tileLayer.wms(wms, { layers: "organization:GangaRiver", format: "image/png", transparent: true, opacity: 0.9, attribution: "ISRO/NRSC Bhuvan" });
-      const basinLayer = L.tileLayer.wms(wms, { layers: "organization:ganga_basin_clip", format: "image/png", transparent: true, opacity: 0.55, zIndex: 350, attribution: "ISRO/NRSC Bhuvan" });
+      // Bhuvan's published Ganga basin layer uses the uppercase service name.
+      const basinLayer = L.tileLayer.wms(wms, { layers: "organization:GANGA_BASIN", format: "image/png", transparent: true, opacity: 0.72, zIndex: 350, attribution: "ISRO/NRSC Bhuvan" });
 
       const corridorLayer = L.layerGroup();
       const waterLayer = L.layerGroup();
@@ -70,8 +74,10 @@ export default function Home() {
           const data = await response.json();
           L.geoJSON(data, { style, onEachFeature, pointToLayer }).addTo(layerGroup);
           layerGroup.addTo(map);
-          setInfraStatus((s) => ({ ...s, [statusKey]: `loaded (${data.features?.length ?? 0})` }));
+          infraLoadingRef.current[statusKey] = false;
+          setInfraStatus((s) => ({ ...s, [statusKey]: `visible (${data.features?.length ?? 0)})` }));
         } catch (error) {
+          infraLoadingRef.current[statusKey] = false;
           setInfraStatus((s) => ({ ...s, [statusKey]: "unavailable" }));
           console.warn("NWDP layer unavailable:", path, error);
         }
@@ -117,7 +123,9 @@ export default function Home() {
         )
       };
 
-      // Visual V0.7 prototype layers. They are deliberately labelled illustrative
+      infraLoadersRef.current = loaders;
+
+      // Visual prototype layers. These are deliberately labelled illustrative
       // until exported Earth Engine products are connected to the application.
       const corridorPolygon = L.polygon(
         [[25.475,81.79],[25.487,81.83],[25.468,81.88],[25.455,81.93],[25.425,81.95],[25.405,81.90],[25.42,81.85],[25.45,81.81]],
@@ -125,11 +133,29 @@ export default function Home() {
       ).bindTooltip("V0.7 illustrative 1 km screening corridor");
       corridorPolygon.addTo(corridorLayer);
 
-      const waterPolygon = L.polygon(
-        [[25.46,81.80],[25.472,81.825],[25.46,81.855],[25.445,81.885],[25.432,81.915],[25.417,81.905],[25.43,81.875],[25.447,81.845]],
-        { color: "#283618", weight: 1, fillColor: "#283618", fillOpacity: 0.28 }
-      ).bindTooltip("V0.7 illustrative historical-water envelope");
-      waterPolygon.addTo(waterLayer);
+      // The live Earth Engine water exports are not connected yet, so the timeline
+      // uses clearly-labelled illustrative envelopes that change with the selected year.
+      // Once the real annual rasters are connected, this block is replaced by those assets.
+      const waterStart = [
+        [25.455,81.795],[25.480,81.825],[25.468,81.860],[25.448,81.895],
+        [25.425,81.930],[25.405,81.915],[25.420,81.880],[25.440,81.840]
+      ];
+      const waterEnd = [
+        [25.460,81.800],[25.472,81.825],[25.460,81.855],[25.445,81.885],
+        [25.432,81.915],[25.417,81.905],[25.430,81.875],[25.447,81.845]
+      ];
+      for (let y = 2020; y <= 2026; y += 1) {
+        const t = (y - 2020) / 6;
+        const coords = waterStart.map((p, i) => [
+          p[0] + (waterEnd[i][0] - p[0]) * t,
+          p[1] + (waterEnd[i][1] - p[1]) * t
+        ]);
+        const polygon = L.polygon(coords, {
+          color: "#283618", weight: 1, fillColor: "#283618", fillOpacity: 0.28
+        }).bindTooltip(`Illustrative historical-water envelope • ${y}`);
+        waterShapesRef.current[y] = polygon;
+        if (y === year) polygon.addTo(waterLayer);
+      }
 
       candidates.forEach((candidate) => {
         const marker = L.circleMarker([candidate.lat, candidate.lng], {
@@ -165,16 +191,59 @@ export default function Home() {
     const layers = layersRef.current;
     if (!layers.map) return;
     const map = layers.map;
-    if (name === "satellite") enabled ? layers.imagery.addTo(map) && layers.street.remove() : layers.street.addTo(map) && layers.imagery.remove();
+
+    if (name === "satellite") {
+      if (enabled) { layers.imagery.addTo(map); layers.street.remove(); }
+      else { layers.street.addTo(map); layers.imagery.remove(); }
+    }
     if (name === "river") enabled ? layers.ganga.addTo(map) : layers.ganga.remove();
     if (name === "basin") enabled ? layers.basin.addTo(map) : layers.basin.remove();
     if (name === "corridor") enabled ? layers.corridorLayer.addTo(map) : layers.corridorLayer.remove();
-    if (name === "water") enabled ? layers.waterLayer.addTo(map) : layers.waterLayer.remove();
+    if (name === "water") {
+      if (enabled) {
+        layers.waterLayer.addTo(map);
+        const selectedWater = waterShapesRef.current[year];
+        if (selectedWater) selectedWater.addTo(layers.waterLayer);
+      } else {
+        layers.waterLayer.remove();
+      }
+    }
     if (name === "candidates") enabled ? layers.markerLayer.addTo(map) : layers.markerLayer.remove();
-    if (name === "riverNetwork") enabled ? layers.riverNetworkLayer.addTo(map) : layers.riverNetworkLayer.remove();
-    if (name === "canals") enabled ? layers.canalLayer.addTo(map) : layers.canalLayer.remove();
-    if (name === "dams") enabled ? layers.damLayer.addTo(map) : layers.damLayer.remove();
+
+    const infraLayerMap = {
+      riverNetwork: layers.riverNetworkLayer,
+      canals: layers.canalLayer,
+      dams: layers.damLayer
+    };
+
+    if (infraLayerMap[name]) {
+      const group = infraLayerMap[name];
+      if (enabled) {
+        group.addTo(map);
+        const loader = infraLoadersRef.current[name];
+        if (loader && !group.getLayers().length && !infraLoadingRef.current[name]) {
+          infraLoadingRef.current[name] = true;
+          loader();
+        } else if (group.getLayers().length) {
+          setInfraStatus((s) => ({ ...s, [name]: `visible (${group.getLayers().length})` }));
+        }
+      } else {
+        group.remove();
+        setInfraStatus((s) => ({ ...s, [name]: "off" }));
+      }
+    }
   }
+
+  useEffect(() => {
+    const group = layersRef.current.waterLayer;
+    if (!group || !mapRef.current) return;
+    Object.values(waterShapesRef.current).forEach((shape) => group.removeLayer(shape));
+    if (water) {
+      const selectedWater = waterShapesRef.current[year];
+      if (selectedWater) selectedWater.addTo(group);
+      if (mapRef.current.hasLayer(group)) group.bringToFront();
+    }
+  }, [year, water]);
 
   return (
     <main>
@@ -228,7 +297,7 @@ export default function Home() {
             <a href={NWDP_DAM} target="_blank" rel="noreferrer">Dam dataset ↗</a>
           </div>
 
-          <div className="note"><b>PROTOTYPE DATA</b><br />The corridor and historical-water shapes currently shown on the map are illustrative UI layers. The Earth Engine exports are not yet connected to the web map.</div>
+          <div className="note"><b>PROTOTYPE DATA</b><br />The corridor and historical-water shapes are illustrative UI layers. The year slider now changes the displayed prototype envelope. Earth Engine annual exports are not yet connected to the web map.</div>
         </aside>
 
         <div className="mapWrap">
@@ -283,7 +352,7 @@ export default function Home() {
               <div className="note">Illustrative candidate only. No legal or unauthorized-occupation conclusion is made from this prototype layer.</div>
             </div>
           ) : (
-            <div className="empty"><strong>V0.7</strong><p>Select a candidate marker to inspect its evidence record.</p></div>
+            <div className="empty"><strong>MAP</strong><p>Select a candidate marker to inspect its evidence record.</p></div>
           )}
         </aside>
       </section>
