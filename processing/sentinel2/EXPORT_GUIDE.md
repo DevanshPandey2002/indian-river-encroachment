@@ -42,3 +42,16 @@ Start with:
 - 2026 monsoon diagnostic
 
 Use those outputs to inspect threshold behavior before generating the complete 2020–2026 evidence set.
+
+
+## Web-map integration status
+
+The web application does not fabricate annual water polygons. The verified public JRC/Google Global Surface Water 2021 tile service is used only for the 2020–2021 baseline. For 2022–2026, the application waits for the Sentinel-2 Earth Engine exports described above.
+
+After the GeoTIFFs are exported, publish them as Cloud Optimized GeoTIFFs (COGs) or map tiles and register one hosted layer per year. The web map can then switch the raster source when the year slider changes.
+
+Recommended production chain:
+
+CWC/NWDP river polygon → analysis AOI → Sentinel-2 SR Harmonized → cloud probability → MNDWI → seasonal water frequency → annual envelope → GeoTIFF/COG → web map.
+
+Do not label an annual layer as Sentinel-2-derived until the corresponding Earth Engine export has actually been generated and published.
