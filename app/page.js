@@ -60,12 +60,12 @@ export default function Home() {
 
       // Official NWDP infrastructure is fetched through the app API so the
       // browser does not need to talk directly to the data portal.
-      async function addGeoJsonLayer(path, layerGroup, style, onEachFeature) {
+      async function addGeoJsonLayer(path, layerGroup, style, onEachFeature, pointToLayer) {
         try {
           const response = await fetch(path);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
-          L.geoJSON(data, { style, onEachFeature }).addTo(layerGroup);
+          L.geoJSON(data, { style, onEachFeature, pointToLayer }).addTo(layerGroup);
           layerGroup.addTo(map);
         } catch (error) {
           console.warn("NWDP layer unavailable:", path, error);
@@ -85,6 +85,15 @@ export default function Home() {
             source: "CWC / NWDP"
           }));
         });
+      }
+
+      if (dams) {
+        addGeoJsonLayer("/api/nwdp/dam", damLayer, null, (feature, layer) => {
+          const p = feature.properties || {};
+          const name = p.name || p.NAME || p.dam_name || p.Dam_Name || "NWDP dam";
+          layer.bindTooltip(name);
+          layer.on("click", () => setInfraSelected({ kind: "Dam", name, source: "National Dam Safety Authority / NWDP" }));
+        }, (feature, latlng) => L.circleMarker(latlng, { radius: 5, color: "#bc6c25", fillColor: "#dda15e", fillOpacity: 0.95, weight: 2 }));
       }
 
       if (canals) {
